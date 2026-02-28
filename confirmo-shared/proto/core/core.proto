@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package auth;
+
+import "google/protobuf/timestamp.proto";
+
+service CoreService {
+    rpc CreateLawyerAccount(CreateLawyerAccountRequest) returns (CreateLawyerAccountResponse) {}
+}
+
+message CreateLawyerAccountRequest {
+    string name = 1;
+    string email = 2;
+    string password = 3;
+    string oab_number = 4;
+}
+
+enum Status {
+    PendingEmailVerification = 0;
+    EmailVerified = 1;
+    PendingFaceVerification = 2;
+    FaceVerified = 3;
+    Active = 4;
+    Suspended = 5;
+    Disabled = 6;
+}
+
+message CreateLawyerAccountResponse {
+    string id = 1;
+    string name = 2;
+    Status status = 3;
+    optional google.protobuf.Timestamp email_verified_at = 4;
+    optional google.protobuf.Timestamp face_verified_at = 5;
+    google.protobuf.Timestamp created_at = 6;
+    optional google.protobuf.Timestamp updated_at = 7;
+}

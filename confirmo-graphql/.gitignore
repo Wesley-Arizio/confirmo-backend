@@ -1,0 +1,7 @@
+/target
+
+.env
+
+.idea/
+
+script.sh

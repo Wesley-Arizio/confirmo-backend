@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "confirmo-auth",
+    "confirmo-graphql",
+    "confirmo-grpc",
+    "confirmo-shared",
+    "confirmo-utils"
+]

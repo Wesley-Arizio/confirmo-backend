@@ -1,0 +1,18 @@
+[package]
+name = "confirmo-notification-service"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tracing = "0.1.44"
+tracing-subscriber = {version = "0.3.22", features = ["fmt", "env-filter"]}
+tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros"]}
+rdkafka = { version = "0.38.0", features = ["cmake-build"] }
+serde = { version = "1.0.228"}
+serde_json = { version = "1.0.149" }
+clap = { version = "4.5.54", features = ["derive", "env"]}
+dotenvy = { version = "0.15.7" }
+confirmo-shared = { git = "ssh://git@github.com/Wesley-Arizio/confirmo-shared.git", tag = "v1.0.0" }
+lettre = { version = "0.11.19",  features = ["smtp-transport", "tokio1-native-tls", "hostname", "builder"]}
+thiserror = "2.0.18"
+uuid = { version = "1.20.0", features = ["v4"]}

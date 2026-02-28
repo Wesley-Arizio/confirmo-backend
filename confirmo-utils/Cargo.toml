@@ -1,0 +1,8 @@
+[package]
+name = "confirmo-utils"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+regex = "1.12.2"
+once_cell = "1.21.3"

@@ -1,0 +1,27 @@
+[package]
+name = "confirmo"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+actix-web = "4"
+clap = { version = "4.5.54", features = ["derive", "env"]}
+dotenvy = { version = "0.15.7" }
+juniper = { version = "0.17.0", features = ["chrono"] }
+chrono = { version = "0.4.43", features = ["serde"] }
+confirmo-shared = { git = "ssh://git@github.com/Wesley-Arizio/confirmo-shared.git", tag = "v1.3.0" }
+confirmo-utils = { git = "ssh://git@github.com/Wesley-Arizio/confirmo-utils.git", tag = "v0.0.2" }
+tonic = "0.14.2"
+sqlx = { version = "0.8.6", features = ["postgres", "runtime-tokio", "tls-native-tls", "uuid", "chrono"]}
+tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros"]}
+async-trait = "0.1.89"
+mockall = "0.14.0"
+tracing = "0.1.44"
+tracing-subscriber = {version = "0.3.22", features = ["fmt", "env-filter"]}
+uuid = { version = "1.20.0", features = ["v4"]}
+rdkafka = { version = "0.39.0", features = ["cmake-build"] }
+serde_json = { version = "1.0.149" }
+serde = { version = "1.0.228"}
+thiserror = "2.0.18"
+aws-sdk-s3 = "1.122.0"
+aws-config = "1.8.13"
