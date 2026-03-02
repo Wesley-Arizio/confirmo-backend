@@ -22,7 +22,7 @@ use crate::{
         credentials::{CredentialsRepository, UserBy},
         error::AuthDatabaseError,
     },
-    error::{email_error_to_grpc_status, password_error_to_grpc_status},
+    error::password_error_to_grpc_status,
     interceptor::TRACE_ID_HEADER,
     password::hash_password,
 };
@@ -107,7 +107,10 @@ impl<C: CredentialsRepository> AuthService for AuthServer<C> {
     ) -> Result<Response<CreateCredentialsResponse>, Status> {
         let body = request.into_inner();
 
-        validate_email(&body.email).map_err(email_error_to_grpc_status)?;
+        if !validate_email(&body.email) {
+            return Err(Status::invalid_argument("Invalid Email Format"));
+        }
+
         validate_password(&body.password).map_err(password_error_to_grpc_status)?;
 
         let user_exists = self.credentials_repository.exists(&body.email).await?;
@@ -146,7 +149,10 @@ impl<C: CredentialsRepository> AuthService for AuthServer<C> {
         let metadata = request.metadata().clone();
         let input = request.into_inner();
         let email = input.email;
-        validate_email(&email).map_err(email_error_to_grpc_status)?;
+
+        if !validate_email(&email) {
+            return Err(Status::invalid_argument("Invalid Email Format"));
+        }
 
         let credential = self
             .credentials_repository
@@ -230,7 +236,9 @@ impl<C: CredentialsRepository> AuthService for AuthServer<C> {
             return Err(Status::not_found("Invalid or expired verification code."));
         }
 
-        validate_email(&input.email).map_err(email_error_to_grpc_status)?;
+        if !validate_email(&input.email) {
+            return Err(Status::invalid_argument("Invalid Email Format"));
+        };
 
         let mut verification = self
             .credentials_repository

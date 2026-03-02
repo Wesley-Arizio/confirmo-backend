@@ -1,11 +1,5 @@
-use confirmo_utils::{email::EmailError, password::PasswordError};
+use confirmo_utils::password::PasswordError;
 use tonic::Status;
-
-pub fn email_error_to_grpc_status(value: EmailError) -> Status {
-    match value {
-        EmailError::InvalidFormat => Status::invalid_argument("Invalid Email Format"),
-    }
-}
 
 pub fn password_error_to_grpc_status(value: PasswordError) -> Status {
     match value {
