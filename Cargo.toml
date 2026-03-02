@@ -2,7 +2,7 @@
 members = [
     "confirmo-auth",
     "confirmo-graphql",
-    "confirmo-grpc",
+    "confirmo-notification-service",
     "confirmo-shared",
     "confirmo-utils"
 ]
