@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-confirmo-shared = { git = "ssh://git@github.com/Wesley-Arizio/confirmo-backend.git", tag = "confirmo-shared-v1.3.0" }
-confirmo-utils = { git = "ssh://git@github.com/Wesley-Arizio/confirmo-backend.git", tag = "confirmo-utils-v0.2.0" }
+confirmo-shared = { path = "../confirmo-shared", features = ["grpc"] }
+confirmo-utils = { path = "../confirmo-utils" }
 tokio = { version = "1.49.0", features = ["rt-multi-thread"]}
 tonic = { version = "*" }
 prost = { version = "*"}

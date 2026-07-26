@@ -9,8 +9,8 @@ clap = { version = "4.5.54", features = ["derive", "env"]}
 dotenvy = { version = "0.15.7" }
 juniper = { version = "0.17.0", features = ["chrono"] }
 chrono = { version = "0.4.43", features = ["serde"] }
-confirmo-shared = { git = "ssh://git@github.com/Wesley-Arizio/confirmo-backend.git", tag = "confirmo-shared-v1.3.0" }
-confirmo-utils = { git = "ssh://git@github.com/Wesley-Arizio/confirmo-backend.git", tag = "confirmo-utils-v0.2.0" }
+confirmo-shared = { path = "../confirmo-shared", features = ["full"] }
+confirmo-utils = { path = "../confirmo-utils" }
 tonic = "0.14.2"
 sqlx = { version = "0.8.6", features = ["postgres", "runtime-tokio", "tls-native-tls", "uuid", "chrono"]}
 tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros"]}

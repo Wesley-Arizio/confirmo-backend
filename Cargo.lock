@@ -1106,8 +1106,8 @@ dependencies = [
  "aws-sdk-s3",
  "chrono",
  "clap",
- "confirmo-shared 0.1.0 (git+ssh://git@github.com/Wesley-Arizio/confirmo-backend.git?tag=confirmo-shared-v1.3.0)",
- "confirmo-utils 0.1.0 (git+ssh://git@github.com/Wesley-Arizio/confirmo-backend.git?tag=confirmo-utils-v0.2.0)",
+ "confirmo-shared",
+ "confirmo-utils",
  "dotenvy",
  "juniper",
  "mockall",
@@ -1130,8 +1130,8 @@ dependencies = [
  "argon2",
  "async-trait",
  "clap",
- "confirmo-shared 0.1.0 (git+ssh://git@github.com/Wesley-Arizio/confirmo-backend.git?tag=confirmo-shared-v1.3.0)",
- "confirmo-utils 0.1.0 (git+ssh://git@github.com/Wesley-Arizio/confirmo-backend.git?tag=confirmo-utils-v0.2.0)",
+ "confirmo-shared",
+ "confirmo-utils",
  "dotenvy",
  "futures",
  "hex",
@@ -1159,7 +1159,7 @@ name = "confirmo-notification-service"
 version = "0.1.0"
 dependencies = [
  "clap",
- "confirmo-shared 0.1.0 (git+ssh://git@github.com/Wesley-Arizio/confirmo-backend.git?tag=confirmo-shared-v1.3.0)",
+ "confirmo-shared",
  "dotenvy",
  "lettre",
  "rdkafka 0.38.0",
@@ -1188,33 +1188,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "confirmo-shared"
-version = "0.1.0"
-source = "git+ssh://git@github.com/Wesley-Arizio/confirmo-backend.git?tag=confirmo-shared-v1.3.0#e94529848470b65020b6511ae606697a994a80e8"
-dependencies = [
- "prost",
- "rdkafka 0.39.0",
- "serde",
- "serde_json",
- "tonic",
- "tonic-prost",
- "tonic-prost-build",
- "tracing",
- "uuid",
-]
-
-[[package]]
 name = "confirmo-utils"
 version = "0.1.0"
-dependencies = [
- "once_cell",
- "regex",
-]
-
-[[package]]
-name = "confirmo-utils"
-version = "0.1.0"
-source = "git+ssh://git@github.com/Wesley-Arizio/confirmo-backend.git?tag=confirmo-utils-v0.2.0#e94529848470b65020b6511ae606697a994a80e8"
 dependencies = [
  "once_cell",
  "regex",
