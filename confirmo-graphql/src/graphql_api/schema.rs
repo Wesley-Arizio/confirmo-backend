@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::application::core_service::CoreService;
 
-use crate::graphql_api::model::{GqlLawyer, GqlPresignedUploadResponse};
+use crate::graphql_api::model::GqlLawyer;
 use actix_web::web;
 use juniper::{Context, EmptySubscription, FieldResult, RootNode};
 
@@ -72,33 +72,6 @@ impl MutationRoot {
             .request_new_email_verifcation_code(&email)
             .await?;
         Ok(result)
-    }
-
-    async fn get_presigned_url(
-        context: &GraphqlContext,
-        email: String,
-    ) -> FieldResult<GqlPresignedUploadResponse> {
-        let result = context
-            .app_state
-            .core_service
-            .get_presigned_url(email)
-            .await?;
-
-        Ok(result.into())
-    }
-
-    async fn submit_profile_for_review(
-        context: &GraphqlContext,
-        email: String,
-        image_key: String,
-    ) -> FieldResult<bool> {
-        context
-            .app_state
-            .core_service
-            .submit_profile_for_review(email, image_key)
-            .await?;
-
-        Ok(true)
     }
 }
 

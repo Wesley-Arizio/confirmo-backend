@@ -13,9 +13,6 @@ use crate::domain::lawyer::{CreateLawyerInput, Lawyer};
 pub enum StatusDAO {
     PendingEmailVerification,
     EmailVerified,
-    PendingFaceReview,
-    FaceRejected,
-    FaceVerified,
     Active,
     Suspended,
     Disabled,
@@ -37,7 +34,6 @@ pub struct UserDAO {
     pub status: StatusDAO,
     pub role: RoleDAO,
     pub email_verified_at: Option<DateTime<Utc>>,
-    pub face_verified_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
 }
@@ -74,13 +70,13 @@ impl LawyerRepository for LawyerPostgresRepository {
     async fn get_lawyer(&self, by: UserBy) -> Result<Option<Lawyer>, DatabaseError> {
         let maybe_user: Option<UserDAO> = match by {
             UserBy::Id(id) => {
-                sqlx::query_as(r#"SELECT id, name, email, status, role, email_verified_at, face_verified_at, created_at, updated_at FROM users WHERE id = $1"#)
+                sqlx::query_as(r#"SELECT id, name, email, status, role, email_verified_at, created_at, updated_at FROM users WHERE id = $1"#)
                     .bind(id)
                     .fetch_optional(&*self.pg_pool)
                     .await?
             }
             UserBy::Email(email) => {
-                sqlx::query_as(r#"SELECT id, name, email, status, role, email_verified_at, face_verified_at, created_at, updated_at FROM users WHERE email = $1"#)
+                sqlx::query_as(r#"SELECT id, name, email, status, role, email_verified_at, created_at, updated_at FROM users WHERE email = $1"#)
                     .bind(email)
                     .fetch_optional(&*self.pg_pool)
                     .await?
@@ -103,7 +99,7 @@ impl LawyerRepository for LawyerPostgresRepository {
     }
 
     async fn create_lawyer(&self, input: CreateLawyerInput) -> Result<Lawyer, DatabaseError> {
-        let user: UserDAO = sqlx::query_as(r#"INSERT INTO users (id, name, email, status, role) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, status, role, email_verified_at, face_verified_at, created_at, updated_at;"#)
+        let user: UserDAO = sqlx::query_as(r#"INSERT INTO users (id, name, email, status, role) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, status, role, email_verified_at, created_at, updated_at;"#)
             .bind(input.user_id)
             .bind(input.name)
             .bind(input.email)
@@ -132,23 +128,6 @@ impl LawyerRepository for LawyerPostgresRepository {
         )
         .bind(user_id)
         .bind(StatusDAO::EmailVerified)
-        .execute(&*self.pg_pool)
-        .await?;
-
-        if result.rows_affected() == 0 {
-            return Err(DatabaseError::NotFound);
-        }
-
-        Ok(true)
-    }
-
-    async fn verify_face(&self, user_id: Uuid) -> Result<bool, DatabaseError> {
-        let result = sqlx::query(
-            r#"UPDATE users SET status = $2::status, face_verified_at = now(), updated_at = now() WHERE id = $1"#,
-
-        )
-        .bind(user_id)
-        .bind(StatusDAO::PendingFaceReview)
         .execute(&*self.pg_pool)
         .await?;
 

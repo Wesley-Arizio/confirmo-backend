@@ -1,9 +1,8 @@
 mod domain;
 
 use crate::application::core_service::CoreService;
-use crate::application::ports::{AwsS3Presigner, GrpcAuthApi, KafkaMessageProducer};
+use crate::application::ports::GrpcAuthApi;
 use crate::database::lawyer::LawyerPostgresRepository;
-use crate::database::submission::SubmissionPostgresRepository;
 use crate::graphql_api::schema::{AppState, GraphqlContext, Schema, create_schema};
 use actix_web::body::MessageBody;
 use actix_web::dev::{ServiceRequest, ServiceResponse};
@@ -56,18 +55,6 @@ pub struct Args {
     /// Comma-separated list of Kafka topics to consume
     #[arg(long, env = "KAFKA_CONSUMER_TOPICS")]
     kafka_consumer_topics: String,
-
-    /// The AWS Region.
-    #[structopt(long, env = "AWS_REGION")]
-    aws_region: String,
-
-    /// The name of the bucket.
-    #[structopt(long, env = "AWS_BUCKET")]
-    aws_bucket: String,
-
-    /// The name of the bucket.
-    #[structopt(long, env = "KAFKA_TOPIC_CORE_PROFILE_REVIEW_REQUESTED")]
-    kafka_profile_review_requested: String,
 }
 
 /// GraphiQL playground UI
@@ -118,17 +105,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 pub enum CoreEvent {
     EmailVerified(EmailVerifiedPayload),
-    ProfileReviewRequested(ProfileReviewRequestedPayload),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EmailVerifiedPayload {
     pub user_id: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ProfileReviewRequestedPayload {
-    user_id: String,
 }
 
 #[actix_web::main]
@@ -159,25 +140,13 @@ async fn main() -> std::io::Result<()> {
 
     let grpc_auth_api = Arc::new(GrpcAuthApi::new(auth_client.clone()));
     let lawyer_repository = Arc::new(LawyerPostgresRepository::new(pg_pool.clone()));
-    let submission_repository = Arc::new(SubmissionPostgresRepository::new(pg_pool.clone()));
-    let s3_presigner = Arc::new(AwsS3Presigner::new(args.aws_bucket, args.aws_region).await);
-    let producer = Arc::new(KafkaMessageProducer::new(
-        &args.kafka_brokers,
-        args.kafka_profile_review_requested.clone(),
-    ));
-    let core_service: Arc<CoreService> = Arc::new(CoreService::new(
-        lawyer_repository.clone(),
-        submission_repository,
-        s3_presigner,
-        producer,
-        grpc_auth_api,
-    ));
+    let core_service: Arc<CoreService> =
+        Arc::new(CoreService::new(lawyer_repository, grpc_auth_api));
     let kafka_consumer_group_id = args.kafka_consumer_group_id.clone();
     let kafka_brokers = args.kafka_brokers.clone();
     let kafka_consumer_topics = args.kafka_consumer_topics.clone();
 
     let core_service_kafka = core_service.clone();
-    let kafka_profile_review_requested = args.kafka_profile_review_requested;
     let consumer_taks = tokio::task::spawn(async move {
         let core_service = core_service_kafka.clone();
         let consumer: Arc<StreamConsumer> = Arc::new(
@@ -192,7 +161,7 @@ async fn main() -> std::io::Result<()> {
         );
 
         consumer
-            .subscribe(&[&kafka_consumer_topics, &kafka_profile_review_requested])
+            .subscribe(&[&kafka_consumer_topics])
             .expect("Could not subscribe to topics");
 
         let processor = KafkaMessageProcessor::new(consumer.clone());
@@ -218,14 +187,6 @@ async fn main() -> std::io::Result<()> {
                             processor
                                 .process(&m, &trace_id, "email_verified", || async {
                                     core_service.email_verified(&payload.user_id).await
-                                })
-                                .await;
-                        }
-                        CoreEvent::ProfileReviewRequested(payload) => {
-                            let trace_id = get_trace_id(&m);
-                            processor
-                                .process(&m, &trace_id, "profile_review_requested", || async {
-                                    core_service.profile_review_requested(payload.user_id).await
                                 })
                                 .await;
                         }
