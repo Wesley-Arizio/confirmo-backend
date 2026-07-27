@@ -47,7 +47,7 @@ pub struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    dotenvy::dotenv().expect("Failed to load .env file");
+    dotenvy::dotenv().ok();
     let args = Args::parse();
 
     tracing_subscriber::fmt()
@@ -55,7 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_max_level(Level::DEBUG)
         .init();
 
-    let addr = format!("127.0.0.1:{}", args.port)
+    let addr = format!("0.0.0.0:{}", args.port)
         .parse()
         .expect("Could not parse server address");
 
@@ -69,6 +69,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .connect(&args.database_url)
         .await
         .expect("Could not connect with database");
+
+    sqlx::migrate!("./migrations")
+        .run(&pg_pool)
+        .await
+        .expect("Could not run database migrations");
 
     let credentials_repo = CredentialsPostgresRepo::new(Arc::new(pg_pool));
 

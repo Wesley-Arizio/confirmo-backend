@@ -63,7 +63,7 @@ fn get_trace_id(message: &BorrowedMessage<'_>) -> String {
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    dotenvy::dotenv().expect("Failed to load .env file");
+    dotenvy::dotenv().ok();
     let args = Args::parse();
 
     tracing_subscriber::fmt()

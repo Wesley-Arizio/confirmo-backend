@@ -217,9 +217,10 @@ impl CredentialsRepository for CredentialsPostgresRepo {
     }
 
     async fn verify_email_credential(&self, email: &str) -> Result<(), AuthDatabaseError> {
-        let result = sqlx::query!(
-            r#"UPDATE credentials SET email_verified = true, updated_at = now() WHERE email = $1 AND email_verified = false"#, email
+        let result = sqlx::query(
+            r#"UPDATE credentials SET email_verified = true, updated_at = now() WHERE email = $1 AND email_verified = false"#,
         )
+        .bind(email)
         .execute(&*self.pg_pool)
         .await?;
 

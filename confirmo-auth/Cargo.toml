@@ -9,7 +9,7 @@ confirmo-utils = { path = "../confirmo-utils" }
 tokio = { version = "1.49.0", features = ["rt-multi-thread"]}
 tonic = { version = "*" }
 prost = { version = "*"}
-sqlx = { version = "0.8.6", features = ["postgres", "runtime-tokio", "tls-native-tls", "uuid", "chrono"]}
+sqlx = { version = "0.8.6", features = ["postgres", "runtime-tokio", "tls-native-tls", "uuid", "chrono", "migrate"]}
 async-trait = "0.1.89"
 mockall = "0.14.0"
 regex = "1.12.2"

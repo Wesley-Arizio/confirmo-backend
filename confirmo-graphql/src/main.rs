@@ -114,7 +114,7 @@ pub struct EmailVerifiedPayload {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    dotenvy::dotenv().expect("Failed to load .env file");
+    dotenvy::dotenv().ok();
     let args = Args::parse();
 
     tracing_subscriber::fmt()
