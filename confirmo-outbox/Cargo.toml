@@ -1,0 +1,17 @@
+[package]
+name = "confirmo-outbox"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+sqlx = { version = "0.8.6", features = ["postgres", "runtime-tokio", "tls-native-tls", "uuid", "chrono", "json"] }
+rdkafka = { version = "0.39.0", features = ["cmake-build"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { version = "1.0.149" }
+uuid = { version = "1.20.0", features = ["v4"] }
+chrono = { version = "0.4.43", features = ["serde"] }
+tokio = { version = "1.49.0", features = ["time", "rt", "macros"] }
+tracing = "0.1.44"
+thiserror = "2.0.18"
+async-trait = "0.1.89"
+mockall = "0.14.0"

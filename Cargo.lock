@@ -1173,6 +1173,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "confirmo-outbox"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "mockall",
+ "rdkafka 0.39.0",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "confirmo-shared"
 version = "0.1.0"
 dependencies = [
