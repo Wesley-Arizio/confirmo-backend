@@ -1130,6 +1130,7 @@ dependencies = [
  "argon2",
  "async-trait",
  "clap",
+ "confirmo-outbox",
  "confirmo-shared",
  "confirmo-utils",
  "dotenvy",

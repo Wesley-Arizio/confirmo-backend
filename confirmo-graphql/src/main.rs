@@ -138,6 +138,11 @@ async fn main() -> std::io::Result<()> {
             .expect("Could not connect with database"),
     );
 
+    sqlx::migrate!("./migrations")
+        .run(&*pg_pool)
+        .await
+        .expect("Could not run database migrations");
+
     let grpc_auth_api = Arc::new(GrpcAuthApi::new(auth_client.clone()));
     let lawyer_repository = Arc::new(LawyerPostgresRepository::new(pg_pool.clone()));
     let core_service: Arc<CoreService> =
@@ -208,7 +213,7 @@ async fn main() -> std::io::Result<()> {
             .service(graphql_playground)
             .service(graphql)
     })
-    .bind(("127.0.0.1", args.port))?
+    .bind(("0.0.0.0", args.port))?
     .run()
     .await?;
 

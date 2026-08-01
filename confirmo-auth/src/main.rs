@@ -1,6 +1,10 @@
 use std::sync::Arc;
 
 use clap::Parser;
+use confirmo_outbox::{
+    KafkaMessagePublisher, MessagePublisher, OutboxPostgresRepository, OutboxRelay,
+    OutboxRepository,
+};
 use confirmo_shared::auth::auth_service_server::AuthServiceServer;
 use rdkafka::{ClientConfig, producer::FutureProducer};
 use sqlx::postgres::PgPoolOptions;
@@ -65,22 +69,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .create()
         .expect("Producer creation failed");
 
-    let pg_pool = PgPoolOptions::new()
-        .connect(&args.database_url)
-        .await
-        .expect("Could not connect with database");
+    let pg_pool = Arc::new(
+        PgPoolOptions::new()
+            .connect(&args.database_url)
+            .await
+            .expect("Could not connect with database"),
+    );
 
     sqlx::migrate!("./migrations")
-        .run(&pg_pool)
+        .run(&*pg_pool)
         .await
         .expect("Could not run database migrations");
 
-    let credentials_repo = CredentialsPostgresRepo::new(Arc::new(pg_pool));
+    let credentials_repo = CredentialsPostgresRepo::new(pg_pool.clone());
+
+    let outbox_repository: Arc<dyn OutboxRepository> =
+        Arc::new(OutboxPostgresRepository::new(pg_pool.clone()));
+
+    let publisher: Arc<dyn MessagePublisher> = Arc::new(KafkaMessagePublisher::new(producer));
+    let relay = OutboxRelay::new(outbox_repository.clone(), publisher);
+    tokio::spawn(relay.run());
 
     let auth_service = AuthServer::new(
         credentials_repo,
+        outbox_repository,
+        pg_pool.clone(),
         args.hash_secret,
-        producer,
         args.kafka_auth_email_verification,
         args.kafka_auth_email_verified,
     );

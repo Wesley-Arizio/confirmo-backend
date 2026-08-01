@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 confirmo-shared = { path = "../confirmo-shared", features = ["grpc"] }
 confirmo-utils = { path = "../confirmo-utils" }
+confirmo-outbox = { path = "../confirmo-outbox" }
 tokio = { version = "1.49.0", features = ["rt-multi-thread"]}
 tonic = { version = "*" }
 prost = { version = "*"}

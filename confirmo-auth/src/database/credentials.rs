@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use sqlx::{
-    PgPool,
+    PgConnection, PgPool,
     types::{
         Uuid,
         chrono::{DateTime, Utc},
@@ -41,7 +41,11 @@ pub trait CredentialsRepository: Send + Sync + 'static {
         password_hash: String,
     ) -> Result<Credentials, AuthDatabaseError>;
 
-    async fn verify_email_credential(&self, email: &str) -> Result<(), AuthDatabaseError>;
+    async fn verify_email_credential(
+        &self,
+        conn: &mut PgConnection,
+        email: &str,
+    ) -> Result<(), AuthDatabaseError>;
 
     async fn get_credential(&self, id: UserBy) -> Result<Option<Credentials>, AuthDatabaseError>;
 
@@ -49,6 +53,7 @@ pub trait CredentialsRepository: Send + Sync + 'static {
 
     async fn create_verification_code(
         &self,
+        conn: &mut PgConnection,
         credential_id: Uuid,
         code: &str,
         expires_at: DateTime<Utc>,
@@ -64,6 +69,7 @@ pub trait CredentialsRepository: Send + Sync + 'static {
 
     async fn update_credential_verification(
         &self,
+        conn: &mut PgConnection,
         credential_verification: CredentialVerification,
     ) -> Result<CredentialVerification, AuthDatabaseError>;
 }
@@ -131,11 +137,12 @@ impl CredentialsRepository for CredentialsPostgresRepo {
 
     async fn create_verification_code(
         &self,
+        conn: &mut PgConnection,
         credential_id: Uuid,
         code: &str,
         expires_at: DateTime<Utc>,
     ) -> Result<CredentialVerification, AuthDatabaseError> {
-        let credential_verification: CredentialVerification = sqlx::query_as(r#"INSERT INTO credential_verifications (credential_id, code, expires_at) VALUES ($1, $2, $3) RETURNING id, code, expires_at, used_at, created_at, credential_id, attempt_count"#).bind(credential_id).bind(code).bind(expires_at).fetch_one(&*self.pg_pool)
+        let credential_verification: CredentialVerification = sqlx::query_as(r#"INSERT INTO credential_verifications (credential_id, code, expires_at) VALUES ($1, $2, $3) RETURNING id, code, expires_at, used_at, created_at, credential_id, attempt_count"#).bind(credential_id).bind(code).bind(expires_at).fetch_one(&mut *conn)
         .await?;
 
         Ok(credential_verification)
@@ -204,24 +211,29 @@ impl CredentialsRepository for CredentialsPostgresRepo {
 
     async fn update_credential_verification(
         &self,
+        conn: &mut PgConnection,
         credential_verification: CredentialVerification,
     ) -> Result<CredentialVerification, AuthDatabaseError> {
         let credential_verification: CredentialVerification = sqlx::query_as(r#"UPDATE credential_verifications SET used_at = $2, attempt_count = $3 WHERE id = $1 RETURNING id, code, expires_at, used_at, created_at, credential_id, attempt_count"#)
             .bind(credential_verification.id)
             .bind(credential_verification.used_at)
             .bind(credential_verification.attempt_count)
-            .fetch_one(&*self.pg_pool)
+            .fetch_one(&mut *conn)
         .await?;
 
         Ok(credential_verification)
     }
 
-    async fn verify_email_credential(&self, email: &str) -> Result<(), AuthDatabaseError> {
+    async fn verify_email_credential(
+        &self,
+        conn: &mut PgConnection,
+        email: &str,
+    ) -> Result<(), AuthDatabaseError> {
         let result = sqlx::query(
             r#"UPDATE credentials SET email_verified = true, updated_at = now() WHERE email = $1 AND email_verified = false"#,
         )
         .bind(email)
-        .execute(&*self.pg_pool)
+        .execute(&mut *conn)
         .await?;
 
         if result.rows_affected() == 0 {

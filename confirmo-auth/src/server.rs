@@ -1,5 +1,7 @@
+use std::sync::Arc;
 use std::time::Duration;
 
+use confirmo_outbox::{NewOutboxMessage, OutboxRepository};
 use confirmo_shared::{
     auth::{
         CreateCredentialsRequest, CreateCredentialsResponse, EmailVerificationRequest,
@@ -9,11 +11,8 @@ use confirmo_shared::{
 };
 use confirmo_utils::{email::validate_email, password::validate_password};
 use rand::Rng;
-use rdkafka::{
-    message::{Header, OwnedHeaders},
-    producer::{FutureProducer, FutureRecord},
-};
 use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
 use sqlx::types::chrono::Utc;
 use tonic::{Request, Response, Status};
 
@@ -27,7 +26,6 @@ use crate::{
     password::hash_password,
 };
 
-const KAKFA_TOPIC_SEND_MESSAGE_TIMEOUT_IN_SECONDS: u64 = 5000;
 const EMAIL_VERIFICATION_CODE_DIGITS: usize = 6;
 const MAXIMUM_EMAIL_VERIFICATION_ATTEMPTS: u8 = 3;
 
@@ -36,6 +34,11 @@ impl From<AuthDatabaseError> for Status {
         tracing::error!("{:?}", value);
         Status::internal("Something went wrong, see the logs")
     }
+}
+
+fn internal(error: impl std::fmt::Debug) -> Status {
+    tracing::error!("{:?}", error);
+    Status::internal("Something went wrong, see the logs")
 }
 
 fn generate_email_code() -> String {
@@ -75,8 +78,9 @@ where
     C: CredentialsRepository,
 {
     credentials_repository: C,
+    outbox_repository: Arc<dyn OutboxRepository>,
+    pool: Arc<PgPool>,
     hash_secret: String,
-    producer: FutureProducer,
     kafka_auth_email_verification: String,
     kafka_auth_email_verified: String,
 }
@@ -84,15 +88,17 @@ where
 impl<C: CredentialsRepository> AuthServer<C> {
     pub fn new(
         credentials_repository: C,
+        outbox_repository: Arc<dyn OutboxRepository>,
+        pool: Arc<PgPool>,
         hash_secret: String,
-        producer: FutureProducer,
         kafka_auth_email_verification: String,
         kafka_auth_email_verified: String,
     ) -> Self {
         Self {
             credentials_repository,
+            outbox_repository,
+            pool,
             hash_secret,
-            producer,
             kafka_auth_email_verification,
             kafka_auth_email_verified,
         }
@@ -169,59 +175,48 @@ impl<C: CredentialsRepository> AuthService for AuthServer<C> {
             .get_lastest_verification_code_by_credential_id(credential.id)
             .await?;
 
-        match maybe_credential_verification {
-            Some(_) => Ok(Response::new(())),
-            None => {
-                let code = generate_email_code();
-                let code_hash = hash_code(&code, self.hash_secret.as_bytes());
-                let expirest_at = Utc::now() + Duration::from_mins(3);
-
-                self.credentials_repository
-                    .create_verification_code(credential.id, &code_hash, expirest_at)
-                    .await?;
-
-                let payload = AuthEvent::EmailVerification(EmailVerificationPayload {
-                    email: credential.email,
-                    token: code,
-                });
-
-                let payload = serde_json::to_string(&payload).map_err(|e| {
-                    tracing::error!(
-                        "Error converting payload to string for message to kafka: {:#?}",
-                        e
-                    );
-                    Status::internal("Internal Server Error")
-                })?;
-
-                let trace_id = metadata.get(TRACE_ID_HEADER).and_then(|v| v.to_str().ok());
-                let header = OwnedHeaders::new().insert(Header {
-                    key: TRACE_ID_HEADER,
-                    value: trace_id,
-                });
-
-                let record: FutureRecord<'_, str, String> =
-                    FutureRecord::to(&self.kafka_auth_email_verification)
-                        .payload(&payload)
-                        .headers(header);
-
-                self.producer
-                    .send(
-                        record,
-                        Duration::from_secs(KAKFA_TOPIC_SEND_MESSAGE_TIMEOUT_IN_SECONDS),
-                    )
-                    .await
-                    .map_err(|e| {
-                        tracing::error!(
-                            "Error sending message to topic: '{}' error: {:#?}",
-                            &self.kafka_auth_email_verification,
-                            e
-                        );
-                        Status::internal("Internal Server Error")
-                    })?;
-
-                Ok(Response::new(()))
-            }
+        if maybe_credential_verification.is_some() {
+            return Ok(Response::new(()));
         }
+
+        let credential_id = credential.id;
+        let code = generate_email_code();
+        let code_hash = hash_code(&code, self.hash_secret.as_bytes());
+        let expires_at = Utc::now() + Duration::from_mins(3);
+
+        let trace_id = metadata
+            .get(TRACE_ID_HEADER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
+
+        let event = AuthEvent::EmailVerification(EmailVerificationPayload {
+            email: credential.email,
+            token: code,
+        });
+        let payload = serde_json::to_value(&event).map_err(internal)?;
+
+        let mut tx = self.pool.begin().await.map_err(internal)?;
+
+        self.credentials_repository
+            .create_verification_code(&mut tx, credential_id, &code_hash, expires_at)
+            .await?;
+
+        self.outbox_repository
+            .enqueue(
+                &mut tx,
+                NewOutboxMessage {
+                    topic: self.kafka_auth_email_verification.clone(),
+                    partition_key: None,
+                    payload,
+                    trace_id,
+                },
+            )
+            .await
+            .map_err(internal)?;
+
+        tx.commit().await.map_err(internal)?;
+
+        Ok(Response::new(()))
     }
 
     async fn verify_email(
@@ -252,8 +247,9 @@ impl<C: CredentialsRepository> AuthService for AuthServer<C> {
             || verification.expires_at < Utc::now()
         {
             tracing::error!("Email verification code exceeded attempt count or expired");
+            let mut conn = self.pool.acquire().await.map_err(internal)?;
             self.credentials_repository
-                .update_credential_verification(verification)
+                .update_credential_verification(&mut conn, verification)
                 .await?;
 
             return Err(Status::not_found("Invalid or expired verification code."));
@@ -263,61 +259,51 @@ impl<C: CredentialsRepository> AuthService for AuthServer<C> {
 
         if verification.code != hash {
             tracing::error!("Wrong code");
+            let mut conn = self.pool.acquire().await.map_err(internal)?;
             self.credentials_repository
-                .update_credential_verification(verification)
+                .update_credential_verification(&mut conn, verification)
                 .await?;
 
             return Err(Status::not_found("Invalid or expired verification code."));
         }
 
         verification.used_at = Some(Utc::now());
+        let credential_id = verification.credential_id;
 
-        let result = self
-            .credentials_repository
-            .update_credential_verification(verification)
+        let trace_id = metadata
+            .get(TRACE_ID_HEADER)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
+
+        let event = CoreEvent::EmailVerified(EmailVerifiedPayload {
+            user_id: credential_id.to_string(),
+        });
+        let payload = serde_json::to_value(&event).map_err(internal)?;
+
+        let mut tx = self.pool.begin().await.map_err(internal)?;
+
+        self.credentials_repository
+            .update_credential_verification(&mut tx, verification)
             .await?;
 
         self.credentials_repository
-            .verify_email_credential(&input.email)
+            .verify_email_credential(&mut tx, &input.email)
             .await?;
 
-        let trace_id = metadata.get(TRACE_ID_HEADER).and_then(|v| v.to_str().ok());
-        let header = OwnedHeaders::new().insert(Header {
-            key: TRACE_ID_HEADER,
-            value: trace_id,
-        });
-
-        let payload = CoreEvent::EmailVerified(EmailVerifiedPayload {
-            user_id: result.credential_id.to_string(),
-        });
-
-        let payload = serde_json::to_string(&payload).map_err(|e| {
-            tracing::error!(
-                "Error converting payload to string for message to kafka: {:#?}",
-                e
-            );
-            Status::internal("Internal Server Error")
-        })?;
-
-        let record: FutureRecord<'_, str, String> =
-            FutureRecord::to(&self.kafka_auth_email_verified)
-                .payload(&payload)
-                .headers(header);
-
-        self.producer
-            .send(
-                record,
-                Duration::from_secs(KAKFA_TOPIC_SEND_MESSAGE_TIMEOUT_IN_SECONDS),
+        self.outbox_repository
+            .enqueue(
+                &mut tx,
+                NewOutboxMessage {
+                    topic: self.kafka_auth_email_verified.clone(),
+                    partition_key: None,
+                    payload,
+                    trace_id,
+                },
             )
             .await
-            .map_err(|e| {
-                tracing::error!(
-                    "Error sending message to topic: '{}' error: {:#?}",
-                    &self.kafka_auth_email_verified,
-                    e
-                );
-                Status::internal("Internal Server Error")
-            })?;
+            .map_err(internal)?;
+
+        tx.commit().await.map_err(internal)?;
 
         tracing::info!("Email verified successfuly");
         Ok(Response::new(()))
