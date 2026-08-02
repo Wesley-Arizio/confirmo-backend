@@ -31,6 +31,9 @@ pub enum CoreServiceError {
     #[error("Invalid password format: '{0}'")]
     InvalidPasswordFormat(String),
 
+    #[error("Firm name is required")]
+    InvalidFirmName,
+
     #[error("Invalid verification format")]
     InvalidVerificationCodeFormat,
 
@@ -125,6 +128,7 @@ impl CoreService {
         password: String,
         oab_number: String,
         name: String,
+        firm_name: String,
     ) -> Result<Lawyer, CoreServiceError> {
         if !validate_email(&email) {
             return Err(CoreServiceError::InvalidEmailFormat);
@@ -132,7 +136,12 @@ impl CoreService {
         validate_password(&password)
             .map_err(|e| CoreServiceError::InvalidPasswordFormat(e.to_string()))?;
 
-        tracing::debug!("Validated email and password");
+        let firm_name = firm_name.trim().to_owned();
+        if firm_name.is_empty() {
+            return Err(CoreServiceError::InvalidFirmName);
+        }
+
+        tracing::debug!("Validated email, password and firm name");
 
         let exists_by_oab_number = self
             .lawyer_repository
@@ -156,6 +165,7 @@ impl CoreService {
             status: Status::PendingEmailVerification,
             role: Role::Lawyer,
             oab_number,
+            firm_name,
         };
 
         let lawyer = self
@@ -165,6 +175,7 @@ impl CoreService {
 
         tracing::info!(
             lawyer_id = %lawyer.id,
+            firm_id = %lawyer.firm_id,
             "Lawyer account created"
         );
 
@@ -257,6 +268,7 @@ mod tests {
         Lawyer {
             id,
             status,
+            firm_id: Uuid::new_v4(),
             name: "Mario".to_string(),
             email: email.to_string(),
             role: Role::Lawyer,
@@ -280,6 +292,7 @@ mod tests {
                 "SomeStrongPassword123!".to_string(),
                 "283283".to_string(),
                 "Mario".to_string(),
+                "Mario & Associados".to_string(),
             )
             .await
             .unwrap_err();
@@ -300,6 +313,7 @@ mod tests {
                 "123".to_string(),
                 "283283".to_string(),
                 "Mario".to_string(),
+                "Mario & Associados".to_string(),
             )
             .await
             .unwrap_err();
@@ -324,6 +338,7 @@ mod tests {
                 "SomeStrongPassword123!".to_string(),
                 "283283".to_string(),
                 "Mario".to_string(),
+                "Mario & Associados".to_string(),
             )
             .await
             .unwrap_err();
@@ -352,6 +367,7 @@ mod tests {
                     && input.user_id == user_id
                     && input.status == Status::PendingEmailVerification
                     && input.role == Role::Lawyer
+                    && input.firm_name == "Mario & Associados"
             })
             .times(1)
             .returning(move |_input| {
@@ -383,6 +399,7 @@ mod tests {
                 "SomeStrongPassword123!".to_string(),
                 "283283".to_string(),
                 "Mario".to_string(),
+                "Mario & Associados".to_string(),
             )
             .await
             .unwrap();
@@ -390,6 +407,72 @@ mod tests {
         assert_eq!(lawyer.id, lawyer_id);
         assert_eq!(lawyer.email, "a@b.com");
         assert_eq!(lawyer.status, Status::PendingEmailVerification);
+    }
+
+    #[tokio::test]
+    async fn create_lawyer_trims_the_firm_name() {
+        let user_id = Uuid::new_v4();
+        let lawyer_id = Uuid::new_v4();
+
+        let mut repo = MockLawyerRepo::new();
+        repo.expect_exists_by_oab_number()
+            .times(1)
+            .returning(|_| Ok(false));
+
+        repo.expect_create_lawyer()
+            .withf(|input: &CreateLawyerInput| input.firm_name == "Mario & Associados")
+            .times(1)
+            .returning(move |_input| {
+                Ok(mk_lawyer(
+                    lawyer_id,
+                    Status::PendingEmailVerification,
+                    "a@b.com",
+                ))
+            });
+
+        let mut grpc_auth_api = MockGrpcAuthApi::new();
+        grpc_auth_api
+            .expect_create_credential()
+            .times(1)
+            .returning(move |_, _| Ok(user_id));
+
+        grpc_auth_api
+            .expect_request_email_verification()
+            .times(1)
+            .returning(|_| Ok(()));
+
+        let svc = mk_service(Arc::new(repo), Arc::new(grpc_auth_api));
+
+        svc.create_lawyer_account(
+            "a@b.com".to_string(),
+            "SomeStrongPassword123!".to_string(),
+            "283283".to_string(),
+            "Mario".to_string(),
+            "  Mario & Associados  ".to_string(),
+        )
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn create_lawyer_blank_firm_name_is_rejected() {
+        let repo = Arc::new(MockLawyerRepo::new());
+        let grpc_auth_api = Arc::new(MockGrpcAuthApi::new());
+
+        let svc = mk_service(repo, grpc_auth_api);
+
+        let err = svc
+            .create_lawyer_account(
+                "a@b.com".to_string(),
+                "SomeStrongPassword123!".to_string(),
+                "283283".to_string(),
+                "Mario".to_string(),
+                "   ".to_string(),
+            )
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, CoreServiceError::InvalidFirmName));
     }
 
     #[tokio::test]
@@ -412,6 +495,7 @@ mod tests {
                 "SomeStrongPassword123!".to_string(),
                 "283283".to_string(),
                 "Mario".to_string(),
+                "Mario & Associados".to_string(),
             )
             .await
             .unwrap_err();
@@ -446,6 +530,7 @@ mod tests {
                 "SomeStrongPassword123!".to_string(),
                 "283283".to_string(),
                 "Mario".to_string(),
+                "Mario & Associados".to_string(),
             )
             .await
             .unwrap_err();
@@ -492,6 +577,7 @@ mod tests {
                 "SomeStrongPassword123!".to_string(),
                 "283283".to_string(),
                 "Mario".to_string(),
+                "Mario & Associados".to_string(),
             )
             .await
             .unwrap_err();

@@ -74,6 +74,7 @@ pub struct Lawyer {
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
     pub oab_number: String,
+    pub firm_id: Uuid,
 }
 
 pub struct CreateLawyerInput {
@@ -83,6 +84,7 @@ pub struct CreateLawyerInput {
     pub status: Status,
     pub role: Role,
     pub oab_number: String,
+    pub firm_name: String,
 }
 
 impl Lawyer {
@@ -96,6 +98,7 @@ impl Lawyer {
             email_verified_at: user.email_verified_at,
             created_at: user.created_at,
             oab_number: lawyer.oab_number,
+            firm_id: lawyer.firm_id,
             updated_at: user.updated_at,
         }
     }

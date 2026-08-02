@@ -44,7 +44,13 @@ impl MutationRoot {
         let result = context
             .app_state
             .core_service
-            .create_lawyer_account(input.email, input.password, input.oab_number, input.name)
+            .create_lawyer_account(
+                input.email,
+                input.password,
+                input.oab_number,
+                input.name,
+                input.firm_name,
+            )
             .await?;
 
         Ok(result.into())

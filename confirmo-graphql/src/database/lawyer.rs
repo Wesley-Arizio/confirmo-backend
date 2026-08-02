@@ -5,6 +5,7 @@ use sqlx::PgPool;
 use sqlx::{prelude::Type, types::Uuid};
 
 use crate::database::error::DatabaseError;
+use crate::database::firm::FirmDAO;
 use crate::database::traits::{LawyerRepository, UserBy};
 use crate::domain::lawyer::{CreateLawyerInput, Lawyer};
 
@@ -42,6 +43,7 @@ pub struct UserDAO {
 pub struct LawyerDAO {
     pub user_id: Uuid,
     pub oab_number: String,
+    pub firm_id: Uuid,
 }
 
 pub struct LawyerPostgresRepository {
@@ -84,11 +86,12 @@ impl LawyerRepository for LawyerPostgresRepository {
         };
 
         if let Some(user) = maybe_user {
-            let lawyer: LawyerDAO =
-                sqlx::query_as(r#"SELECT user_id, oab_number FROM lawyers WHERE user_id = $1"#)
-                    .bind(user.id)
-                    .fetch_one(&*self.pg_pool)
-                    .await?;
+            let lawyer: LawyerDAO = sqlx::query_as(
+                r#"SELECT user_id, oab_number, firm_id FROM lawyers WHERE user_id = $1"#,
+            )
+            .bind(user.id)
+            .fetch_one(&*self.pg_pool)
+            .await?;
 
             let lawyer = Lawyer::from_dao(user, lawyer);
 
@@ -99,22 +102,34 @@ impl LawyerRepository for LawyerPostgresRepository {
     }
 
     async fn create_lawyer(&self, input: CreateLawyerInput) -> Result<Lawyer, DatabaseError> {
+        let mut tx = self.pg_pool.begin().await?;
+
+        let firm: FirmDAO = sqlx::query_as(
+            r#"INSERT INTO firms (name) VALUES ($1) RETURNING id, name, created_at, updated_at;"#,
+        )
+        .bind(input.firm_name)
+        .fetch_one(&mut *tx)
+        .await?;
+
         let user: UserDAO = sqlx::query_as(r#"INSERT INTO users (id, name, email, status, role) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, status, role, email_verified_at, created_at, updated_at;"#)
             .bind(input.user_id)
             .bind(input.name)
             .bind(input.email)
             .bind(StatusDAO::from(input.status))
             .bind(RoleDAO::from(input.role))
-            .fetch_one(&*self.pg_pool)
+            .fetch_one(&mut *tx)
             .await?;
 
         let lawyer: LawyerDAO = sqlx::query_as(
-            r#"INSERT INTO lawyers (user_id, oab_number) VALUES ($1, $2) RETURNING user_id, oab_number;"#,
+            r#"INSERT INTO lawyers (user_id, oab_number, firm_id) VALUES ($1, $2, $3) RETURNING user_id, oab_number, firm_id;"#,
         )
         .bind(input.user_id)
         .bind(input.oab_number)
-        .fetch_one(&*self.pg_pool)
+        .bind(firm.id)
+        .fetch_one(&mut *tx)
         .await?;
+
+        tx.commit().await?;
 
         let lawyer = Lawyer::from_dao(user, lawyer);
 

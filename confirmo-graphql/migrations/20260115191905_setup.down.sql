@@ -1,3 +1,7 @@
+DROP INDEX IF EXISTS idx_messages_firm;
+DROP INDEX IF EXISTS idx_conversation_participants_firm;
+DROP INDEX IF EXISTS idx_conversations_firm;
+DROP INDEX IF EXISTS idx_lawyers_firm;
 DROP INDEX IF EXISTS idx_conversation_participants_user;
 DROP INDEX IF EXISTS idx_messages_conversation;
 DROP INDEX IF EXISTS idx_unique_participant_per_conversation;
@@ -7,8 +11,7 @@ DROP TABLE IF EXISTS conversations;
 DROP TABLE IF EXISTS clients;
 DROP TABLE IF EXISTS lawyers;
 DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS firms;
 DROP TYPE IF EXISTS conversation_type;
 DROP TYPE IF EXISTS role;
 DROP TYPE IF EXISTS status;
-
--- Add down migration script here
